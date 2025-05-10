@@ -1,15 +1,14 @@
 from flask import Flask, request, jsonify
-from sentence_transformers import SentenceTransformer
+import spacy
 import chromadb
-from uuid import uuid4
 import os
 
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Load embedding model
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Load spaCy model (lighter model)
+nlp = spacy.load("en_core_web_md")
 
 storage_path = os.path.join(os.getcwd(), "chroma_store")
 if not os.path.exists(storage_path):
@@ -41,9 +40,10 @@ def list_collections_endpoint():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Function to query the vector DB
-def query_vector_db(query, collection, model, top_k=5):
-    query_embedding = model.encode(query, normalize_embeddings=True)
+# Function to query the vector DB using spaCy embeddings
+def query_vector_db(query, collection, nlp, top_k=5):
+    # Generate embedding using spaCy
+    query_embedding = nlp(query).vector
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k
@@ -73,7 +73,7 @@ def query():
         except Exception as e:
             return jsonify({"error": f"Collection '{collection_name}' not found: {str(e)}"}), 404
 
-        relevant_paragraphs = query_vector_db(user_query, collection, model, top_k=numbers)
+        relevant_paragraphs = query_vector_db(user_query, collection, nlp, top_k=numbers)
         if not relevant_paragraphs:
             return jsonify({"message": "No relevant results found"}), 404
 
